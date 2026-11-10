@@ -168,23 +168,21 @@ class SensorThread(threading.Thread):
             tracker.close()
 
     def _draw_preview(self, frame, sides):
+        """Camera check view: the WHOLE picture is pixelated, so nobody is recognisable
+        (even a face the model missed), but positions are clear enough to set up the laptop."""
         import cv2
         img = cv2.flip(frame, 1)
         h, w = img.shape[:2]
-        for s, f in sides.items():  # blur faces first, then draw labels on top
-            x1, y1, x2, y2 = f["box"]
-            a, b, c2, d = int(x1 * w), int(y1 * h), int(x2 * w), int(y2 * h)
-            if c2 - a > 8 and d - b > 8:
-                roi = img[b:d, a:c2]
-                img[b:d, a:c2] = cv2.resize(cv2.resize(roi, (max(1, (c2 - a) // 14), max(1, (d - b) // 14))),
-                                            (c2 - a, d - b), interpolation=cv2.INTER_NEAREST)
+        img = cv2.resize(cv2.resize(img, (max(1, w // 16), max(1, h // 16)), interpolation=cv2.INTER_AREA),
+                         (w, h), interpolation=cv2.INTER_NEAREST)
         for s, f in sides.items():
             x1, y1, x2, y2 = f["box"]
             c = (181, 109, 47) if s == "L" else (60, 140, 230)
             cv2.rectangle(img, (int(x1 * w), int(y1 * h)), (int(x2 * w), int(y2 * h)), c, 4)
             label = "LEFT student" if s == "L" else "RIGHT student"
-            cv2.putText(img, label, (int(x1 * w), max(int(y1 * h) - 12, 30)), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 255), 6, cv2.LINE_AA)
-            cv2.putText(img, label, (int(x1 * w), max(int(y1 * h) - 12, 30)), cv2.FONT_HERSHEY_SIMPLEX, 1.2, c, 3, cv2.LINE_AA)
+            org = (int(x1 * w), max(int(y1 * h) - 12, 30))
+            cv2.putText(img, label, org, cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 255), 6, cv2.LINE_AA)
+            cv2.putText(img, label, org, cv2.FONT_HERSHEY_SIMPLEX, 1.2, c, 3, cv2.LINE_AA)
         return cv2.resize(img, (480, int(480 * h / w)))
 
     def stop(self):

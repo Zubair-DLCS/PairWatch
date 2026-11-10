@@ -84,8 +84,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force docs\screenshots | Out-Null
-          Copy-Item selftest\start_window.png, selftest\coding_window.png, selftest\camera_check.png docs\screenshots\ -ErrorAction SilentlyContinue
-          Copy-Item selftest\pair_report.html docs\example_pair_report_selftest.html -ErrorAction SilentlyContinue
+          Copy-Item selftest\start_window.png, selftest\coding_window.png docs\screenshots\ -ErrorAction SilentlyContinue
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs

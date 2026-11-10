@@ -15,6 +15,12 @@ At the end of each session it writes a **pair report**. Across sessions it build
 
 **Privacy by design.** No video and no audio are saved. Each camera frame becomes a few numbers (head direction, mouth opening) and is dropped at once. The microphone keeps only loudness. Students are "left" and "right" as seated, never named. Sessions start only after a consent tick.
 
+| Start window | Coding window |
+|---|---|
+| ![start](docs/screenshots/start_window.png) | ![coding](docs/screenshots/coding_window.png) |
+
+*Screenshots taken automatically on Windows by the build test.*
+
 ## Why this project
 
 Pair programming is common in computer science teaching, but a teacher with thirty students cannot see how each pair actually collaborates. Who does the thinking? Does the navigator really guide, or just watch? Do both look at the same code when they talk about it? Research on multimodal learning analytics studies exactly these signals, usually with eye trackers and lab equipment. PairWatch asks how much of that can be done with one ordinary laptop in an ordinary classroom, and keeps the limits honest.

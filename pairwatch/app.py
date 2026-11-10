@@ -96,7 +96,8 @@ class CodingWindow(tk.Toplevel):
         self.desc.pack(fill="x", padx=8, pady=8)
         tk.Label(left, text="Test results", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=8)
         self.results = tk.Text(left, wrap="word", font=("Consolas", 9), relief="flat", bg="#f6f7f9", padx=8, pady=6)
-        self.results.pack(fill="both", expand=True, padx=8, pady=(2, 8))
+        self.results.pack(fill="both", expand=True, padx=8, pady=(2, 4))
+        tk.Label(left, text=CREDIT, fg=BLUE, font=("Segoe UI", 9, "italic"), wraplength=360, justify="left").pack(anchor="w", padx=8, pady=(0, 8))
         self.results.tag_config("ok", foreground=GREEN)
         self.results.tag_config("bad", foreground=RED)
 
@@ -128,7 +129,6 @@ class CodingWindow(tk.Toplevel):
         tk.Button(bottom, text="Next task", command=lambda: self.select_task(min(self.current + 1, len(self.tasks) - 1)),
                   relief="flat", padx=12).pack(side="left", padx=8)
         tk.Button(bottom, text="Reset code", command=self.reset_code, relief="flat", padx=12).pack(side="left")
-        tk.Label(bottom, text=CREDIT, fg=BLUE, font=("Segoe UI", 9, "italic")).pack(side="right")
         self.bind("<F2>", lambda e: self.switch_driver())
         self.bind("<F5>", lambda e: self.run_tests())
         self._show_driver()
@@ -308,7 +308,7 @@ class CalibrationWindow(tk.Toplevel):
         self.canvas.pack(fill="both", expand=True)
         bar = tk.Frame(self, bg="white")
         bar.pack(fill="x", pady=10)
-        self.msg = tk.Label(bar, text="Sit side by side, both facing the screen. Check that the camera sees both faces.",
+        self.msg = tk.Label(bar, text="Sit side by side, both facing the screen. Check that the camera finds both faces. (The view is pixelated on purpose.)",
                             bg="white", font=("Segoe UI", 12))
         self.msg.pack()
         btns = tk.Frame(bar, bg="white")
@@ -389,7 +389,7 @@ class StartWindow:
         ico = resource("pairwatch.ico")
         if ico:
             try:
-                root.iconbitmap(ico)
+                root.iconbitmap(default=ico)  # also used by every other PairWatch window
             except tk.TclError:
                 pass
         self.gxx = find_gxx()
