@@ -102,3 +102,46 @@ def test_reports_are_written(tmp_path):
 def test_spearman():
     assert spearman([1, 2, 3, 4, 5], [2, 4, 6, 8, 10]) == pytest.approx(1.0)
     assert spearman([1, 2, 3], [1, 2, 3]) is None   # too few pairs to say anything
+
+
+# ---------------------------------------------------------------- condition test
+from pairwatch.conditions import (CONDITIONS, TEST_TARGETS, condition_report, load_trials, save_trial,  # noqa: E402
+                                  score, summarise, trial_plan)
+
+PITCH = {"top": 0.40, "middle": 0.55, "bottom": 0.70, "left": 0.55, "right": 0.55, "down": 1.20}
+YAW = {"left": -0.6, "right": 0.6}
+
+
+def _frames(face_rate=1.0, noise=0.0, seed=0):
+    rng = np.random.default_rng(seed)
+    frames, t = [], 0.0
+    for step in trial_plan(hold=3.0):
+        for k in range(30):
+            t += 0.1
+            face = rng.random() < face_rate
+            frames.append({"t": t, "phase": step.phase, "target": step.target, "settled": k >= 10, "face": int(face),
+                           "yaw": YAW.get(step.target, 0.0) + rng.normal(0, noise) if face else None,
+                           "pitch": PITCH[step.target] + rng.normal(0, noise) if face else None,
+                           "size": 0.08 if face else None, "brightness": 120.0})
+    return frames
+
+
+def test_condition_scoring_perfect_and_degraded():
+    r = score(_frames())
+    assert r["calibrated"] and r["face_found"] == 1.0 and r["accuracy_all_frames"] == 1.0
+    assert set(r["per_target"]) == set(TEST_TARGETS)
+    bad = score(_frames(face_rate=0.5, noise=0.08, seed=1))
+    assert 0.35 < bad["face_found"] < 0.65 and bad["accuracy_all_frames"] < 0.6
+
+
+def test_condition_trials_summary_and_report(tmp_path):
+    good = {k: v[0] for k, v in CONDITIONS.items()}
+    dim = dict(good, light="dim")
+    save_trial(tmp_path, "V01", good, _frames())
+    save_trial(tmp_path, "V01 dim", dim, _frames(face_rate=0.6, noise=0.05, seed=2))
+    trials = load_trials(tmp_path)
+    assert len(trials) == 2
+    light = {r["option"]: r for r in summarise(trials)["light"]}
+    assert light["good"]["face_found"] > light["dim"]["face_found"]
+    out = condition_report(tmp_path, tmp_path / "rep.html")
+    assert out.exists() and (tmp_path / "all_trials.csv").exists() and "Malak Zubair" in out.read_text(encoding="utf-8")

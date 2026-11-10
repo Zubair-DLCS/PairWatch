@@ -51,6 +51,32 @@ To add your own tasks, put a `tasks.json` file in `Documents\PairWatch`:
   "tests": [["1 5 3\n", "5"], ["-2 -9 -4\n", "-2"]]}]
 ```
 
+## Condition test: when does webcam sensing fail?
+
+Webcam attention sensing is usually tested in labs. PairWatch includes a small experiment to test it where it will actually be used: in classrooms with dim light, windows behind students, back benches, headscarves or covered faces, glasses, and cheap webcams.
+
+**Start window → Condition test.**
+1. One volunteer sits in front of the camera. The teacher types a volunteer code (e.g. V01) and selects the conditions that are true right now:
+
+   | Factor | Options |
+   |---|---|
+   | Light | good · dim · window behind · power cut / UPS light |
+   | Distance | front (≈60 cm) · middle (≈1.5 m) · back (≈3 m) |
+   | Face covering | none · headscarf · niqab / face covered |
+   | Glasses | no · yes |
+   | Camera | laptop built-in · USB webcam |
+
+2. **Run trial (≈30 s).** The volunteer first looks at the middle, top and bottom of the screen (calibration). Then, in random order, they look at the top, middle and bottom, turn left, turn right, and look down.
+3. Only the second part is scored: was a face found, and did the estimated head direction match the instruction? The calibration comes from the first part, so the score is not inflated.
+4. Repeat with the same volunteer under other conditions (for example good light, then dim; front bench, then back bench). That way conditions are compared within the same person.
+5. **Condition report** shows, for every factor, how often a face was found and how often the direction was right, with the number of trials. All values are also in `all_trials.csv` for your own analysis.
+
+Only numbers are stored: face found, head yaw and pitch, face size, and the picture's average brightness, which objectively checks the light condition. No images.
+
+![condition test](docs/screenshots/condition_prompt.png)
+
+**Ethics.** Volunteers only, with written consent. Face covering is recorded as a technical condition of the camera view. It is never used to describe or identify a person.
+
 ## What is measured
 
 | Measure | How | Why it matters |
@@ -97,6 +123,7 @@ pytest -q                           # tests: C++ tasks, attribution, calibration
 | `pairwatch/attribution.py` | head direction → screen region; speech + mouth movement → speaker |
 | `pairwatch/cpp.py`, `tasks.py` | C++ tasks, compiling and testing with g++ |
 | `pairwatch/metrics.py`, `report.py` | collaboration and performance measures; pair and class reports |
+| `pairwatch/conditions.py` | condition test: trial plan, recorder, scoring, condition report |
 | `.github/workflows/build-windows.yml` | builds the Windows app with MinGW, runs a full automatic session, publishes releases |
 
 ## Author

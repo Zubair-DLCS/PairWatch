@@ -81,6 +81,14 @@ jobs:
           Get-ChildItem selftest
           if ($p.ExitCode -ne 0) { exit 1 }
 
+      - name: Self-test the condition test
+        shell: pwsh
+        run: |
+          $p = Start-Process dist\PairWatch\PairWatch.exe -ArgumentList "--selftest-conditions", "$PWD\selftest", "--image", "$PWD\zidane.jpg" -Wait -PassThru
+          Write-Host "exit code $($p.ExitCode)"
+          if (Test-Path selftest\selftest_conditions.json) { Get-Content selftest\selftest_conditions.json } else { Write-Host "no selftest_conditions.json" }
+          if ($p.ExitCode -ne 0) { exit 1 }
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -92,7 +100,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force docs\screenshots | Out-Null
-          Copy-Item selftest\start_window.png, selftest\coding_window.png docs\screenshots\ -ErrorAction SilentlyContinue
+          Copy-Item selftest\start_window.png, selftest\coding_window.png, selftest\condition_prompt.png docs\screenshots\ -ErrorAction SilentlyContinue
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs

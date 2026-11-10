@@ -382,6 +382,195 @@ class CalibrationWindow(tk.Toplevel):
         self.on_done()
 
 
+class ConditionWindow(tk.Toplevel):
+    """Condition test: one volunteer follows prompts; the teacher records the conditions."""
+
+    def __init__(self, master, image_source: str | None = None, root_dir: Path | None = None,
+                 hold: float = 3.0, settle: float = 1.0, on_close=None):
+        from .conditions import CONDITIONS, tests_root
+        super().__init__(master)
+        self.title(f"{APP} – condition test")
+        self.geometry("1280x780")
+        try:
+            self.state("zoomed")
+        except tk.TclError:
+            pass
+        self.image_source, self.hold, self.settle, self.on_close_cb = image_source, hold, settle, on_close
+        self.root_dir = root_dir or tests_root()
+        self.recorder = None
+        self.photo = None
+        self.mode = "preview"          # preview | countdown | prompt | done
+        self.prompt_target = None
+        self.countdown = 0
+        self.last_result = None
+
+        left = tk.Frame(self, width=380, padx=14, pady=12)
+        left.pack(side="left", fill="y")
+        left.pack_propagate(False)
+        tk.Label(left, text="Condition test", font=("Segoe UI", 18, "bold")).pack(anchor="w")
+        tk.Label(left, justify="left", wraplength=350, fg="#555", text=(
+            "When does webcam attention sensing work? One volunteer sits in front of the camera. "
+            "Choose the conditions that are true right now, then press Run trial (about 30 seconds). "
+            "The volunteer follows the prompts on the screen. Repeat with the same volunteer under "
+            "other conditions.")).pack(anchor="w", pady=(4, 10))
+        row = tk.Frame(left)
+        row.pack(fill="x", pady=3)
+        tk.Label(row, text="Volunteer code", width=14, anchor="w").pack(side="left")
+        self.code = tk.Entry(row, width=22)
+        self.code.insert(0, "V01")
+        self.code.pack(side="left")
+        self.combos = {}
+        for factor, options in CONDITIONS.items():
+            row = tk.Frame(left)
+            row.pack(fill="x", pady=3)
+            tk.Label(row, text=factor.replace("_", " ").capitalize(), width=14, anchor="w").pack(side="left")
+            cb = ttk.Combobox(row, state="readonly", width=22, values=options)
+            cb.current(0)
+            cb.pack(side="left")
+            self.combos[factor] = cb
+        row = tk.Frame(left)
+        row.pack(fill="x", pady=3)
+        tk.Label(row, text="Camera index", width=14, anchor="w").pack(side="left")
+        self.cam = ttk.Combobox(row, state="readonly", width=22, values=["0", "1", "2"])
+        self.cam.current(0)
+        self.cam.pack(side="left")
+        self.cam.bind("<<ComboboxSelected>>", lambda e: self._start_recorder())
+        self.run_btn = tk.Button(left, text="Run trial  (≈30 s)", command=self.run_trial, bg=BLUE, fg="white",
+                                 font=("Segoe UI", 12, "bold"), relief="flat", padx=14, pady=5)
+        self.run_btn.pack(anchor="w", pady=(14, 6))
+        b = tk.Frame(left)
+        b.pack(anchor="w")
+        tk.Button(b, text="Condition report", command=self.report, relief="flat", padx=10).pack(side="left")
+        tk.Button(b, text="Folder", command=lambda: open_folder(self.root_dir), relief="flat", padx=10).pack(side="left", padx=6)
+        self.status = tk.Label(left, text="", justify="left", wraplength=350, font=("Segoe UI", 10))
+        self.status.pack(anchor="w", pady=10)
+        tk.Label(left, text="Only numbers are saved: face found, head direction, face size and\n"
+                            "picture brightness. No images.", fg=GREEN, justify="left").pack(anchor="w")
+        tk.Label(left, text=CREDIT, fg=BLUE, font=("Segoe UI", 9, "italic"), wraplength=350,
+                 justify="left").pack(side="bottom", anchor="w")
+        self.canvas = tk.Canvas(self, bg="white", highlightthickness=0)
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.protocol("WM_DELETE_WINDOW", self.close)
+        self._start_recorder()
+        self.after(150, self._draw)
+
+    def _start_recorder(self):
+        from .conditions import TrialRecorder
+        if self.recorder is not None:
+            self.recorder.stop()
+        self.recorder = TrialRecorder(camera=int(self.cam.get()), image_source=self.image_source)
+        self.recorder.settle = self.settle
+        self.recorder.start()
+
+    def _draw(self):
+        if not self.winfo_exists():
+            return
+        from .conditions import PROMPTS
+        c = self.canvas
+        c.delete("all")
+        w, h = max(c.winfo_width(), 500), max(c.winfo_height(), 400)
+        if self.mode in ("preview", "done"):
+            img = self.recorder.preview if self.recorder else None
+            if img is not None:
+                try:
+                    from PIL import Image, ImageTk
+                    pil = Image.fromarray(img[:, :, ::-1])
+                    sc = min(w * 0.8 / pil.width, h * 0.6 / pil.height, 1.8)
+                    self.photo = ImageTk.PhotoImage(pil.resize((int(pil.width * sc), int(pil.height * sc))))
+                    c.create_image(w // 2, h // 2, image=self.photo)
+                except Exception:
+                    pass
+            found = self.recorder is not None and self.recorder.latest is not None
+            c.create_text(w // 2, 34, text="Face found" if found else "No face found",
+                          fill=GREEN if found else RED, font=("Segoe UI", 18, "bold"))
+            c.create_text(w // 2, h - 30, text="View pixelated on purpose. Sit as you normally would.",
+                          fill="#888", font=("Segoe UI", 10))
+            if self.recorder is not None and self.recorder.error:
+                c.create_text(w // 2, h - 54, text=self.recorder.error, fill=RED, font=("Segoe UI", 10))
+        elif self.mode == "countdown":
+            c.create_text(w // 2, h // 2, text=str(self.countdown), font=("Segoe UI", 96, "bold"), fill=BLUE)
+            c.create_text(w // 2, h // 2 + 110, text="Get ready: follow the red dot and the instructions",
+                          font=("Segoe UI", 16))
+        elif self.mode == "prompt":
+            t = self.prompt_target
+            r = 26
+            if t in ("top", "middle", "bottom"):
+                y = {"top": 0.08, "middle": 0.5, "bottom": 0.92}[t] * h
+                c.create_oval(w // 2 - r, y - r, w // 2 + r, y + r, fill=RED, outline="")
+            elif t == "left":
+                c.create_polygon(40, h // 2, 160, h // 2 - 70, 160, h // 2 + 70, fill=RED)
+            elif t == "right":
+                c.create_polygon(w - 40, h // 2, w - 160, h // 2 - 70, w - 160, h // 2 + 70, fill=RED)
+            elif t == "down":
+                c.create_polygon(w // 2, h - 30, w // 2 - 70, h - 150, w // 2 + 70, h - 150, fill=RED)
+            ty = h // 2 + 70 if t != "middle" else h // 2 + 90
+            c.create_text(w // 2, ty, text=PROMPTS[t], font=("Segoe UI", 18, "bold"), width=w - 340)
+        self.after(100, self._draw)
+
+    def conditions(self) -> dict:
+        return {k: cb.get() for k, cb in self.combos.items()}
+
+    def run_trial(self, done_cb=None):
+        from .conditions import trial_plan
+        self.run_btn.config(state="disabled")
+        self.recorder.frames = []
+        plan = trial_plan(hold=self.hold)
+        self.mode, self.countdown = "countdown", 3
+
+        def count():
+            if self.countdown > 1:
+                self.countdown -= 1
+                self.after(700 if self.hold < 1 else 1000, count)
+            else:
+                self.recorder.recording = True
+                step(0)
+
+        def step(i):
+            if i >= len(plan):
+                return finish()
+            st = plan[i]
+            self.mode, self.prompt_target = "prompt", st.target
+            self.recorder.begin(st.phase, st.target)
+            self.after(int(st.seconds * 1000), lambda: step(i + 1))
+
+        def finish():
+            from .conditions import save_trial
+            self.recorder.recording = False
+            frames = list(self.recorder.frames)
+            d = save_trial(self.root_dir, self.code.get().strip() or "V", self.conditions(), frames)
+            r = json.loads((d / "trial.json").read_text(encoding="utf-8"))["result"]
+            self.last_result = r
+            self.mode = "done"
+            self.run_btn.config(state="normal")
+            if not r.get("test_frames"):
+                self.status.config(text="No frames were recorded. Check the camera.", fg=RED)
+            else:
+                ok = r["face_found"] >= 0.9 and r["accuracy_all_frames"] >= 0.7
+                self.status.config(fg=GREEN if ok else RED, text=(
+                    f"Trial saved.\nFace found: {100 * r['face_found']:.0f}% of the time\n"
+                    f"Direction correct: {100 * r['accuracy_all_frames']:.0f}%"
+                    + ("" if r["calibrated"] else "\n(calibration incomplete: the face was missing during the first part)")))
+            if done_cb:
+                done_cb(d)
+
+        self.after(700 if self.hold < 1 else 1000, count)
+
+    def report(self):
+        from .conditions import condition_report
+        out = condition_report(self.root_dir)
+        if out:
+            webbrowser.open(out.as_uri())
+        else:
+            messagebox.showinfo(APP, "No trials yet.", parent=self)
+
+    def close(self):
+        if self.recorder is not None:
+            self.recorder.stop()
+        self.destroy()
+        if self.on_close_cb:
+            self.on_close_cb()
+
+
 class StartWindow:
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -417,6 +606,7 @@ class StartWindow:
                                    relief="flat", padx=16, pady=5)
         self.start_btn.pack(side="left", padx=6)
         tk.Button(b, text="Class report", command=self.class_report, relief="flat", padx=12, pady=5).pack(side="left", padx=4)
+        tk.Button(b, text="Condition test", command=self.condition_test, relief="flat", padx=12, pady=5).pack(side="left", padx=4)
         tk.Button(b, text="Data folder", command=lambda: open_folder(data_root()), relief="flat", padx=12, pady=5).pack(side="left", padx=4)
         self.status = tk.Label(root, text="", fg="#555")
         self.status.grid(row=7, column=0, columnspan=2, sticky="w", padx=14)
@@ -457,6 +647,10 @@ class StartWindow:
         self.pair.insert(0, f"Pair {n}")
         self.consent.set(False)
         webbrowser.open(report.as_uri())
+
+    def condition_test(self):
+        self.root.withdraw()
+        ConditionWindow(self.root, on_close=self.root.deiconify)
 
     def class_report(self):
         out = class_report(sessions_root())
@@ -522,6 +716,36 @@ def selftest(out_dir: Path, image: str | None):
     return 0 if ok else 1
 
 
+def selftest_conditions(out_dir: Path, image: str | None):
+    """Automatic check of the condition test (used by the Windows build)."""
+    from .conditions import condition_report
+    out_dir.mkdir(parents=True, exist_ok=True)
+    result = {"trial_saved": False, "test_frames": 0, "face_found": None, "report": False}
+    root = tk.Tk()
+    root.withdraw()
+    win = ConditionWindow(root, image_source=image, root_dir=out_dir / "condition_tests", hold=1.0, settle=0.3)
+    win.combos["light"].set("dim")
+
+    def start():
+        screenshot(win, out_dir / "condition_window.png")
+        win.run_trial(done_cb=done)
+        root.after(9000, lambda: screenshot(win, out_dir / "condition_prompt.png"))
+
+    def done(d):
+        r = json.loads((d / "trial.json").read_text(encoding="utf-8"))["result"]
+        result.update(trial_saved=True, test_frames=r.get("test_frames", 0), face_found=r.get("face_found"),
+                      accuracy=r.get("accuracy_all_frames"), calibrated=r.get("calibrated"))
+        rep = condition_report(out_dir / "condition_tests", out_dir / "condition_report.html")
+        result["report"] = bool(rep and rep.exists())
+        root.after(1200, lambda: (screenshot(win, out_dir / "condition_result.png"), win.close(), root.destroy()))
+
+    root.after(4000, start)
+    root.after(60000, root.destroy)  # safety net
+    root.mainloop()
+    (out_dir / "selftest_conditions.json").write_text(json.dumps(result, indent=1))
+    return 0 if result["trial_saved"] and result["test_frames"] > 0 and result["report"] else 1
+
+
 def main():
     if sys.platform == "win32":
         try:
@@ -530,6 +754,10 @@ def main():
         except Exception:
             pass
     args = sys.argv[1:]
+    if args[:1] == ["--selftest-conditions"]:
+        out = Path(args[1]) if len(args) > 1 else Path.cwd() / "selftest"
+        image = args[args.index("--image") + 1] if "--image" in args else None
+        sys.exit(selftest_conditions(out, image))
     if args[:1] == ["--selftest"]:
         out = Path(args[1]) if len(args) > 1 else Path.cwd() / "selftest"
         image = args[args.index("--image") + 1] if "--image" in args else None
