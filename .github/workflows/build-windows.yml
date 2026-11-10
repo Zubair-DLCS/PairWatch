@@ -1,0 +1,127 @@
+name: Build Windows app
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish as a release (e.g. 1.0.0). Leave empty for a test build."
+        required: false
+        default: ""
+      screenshots:
+        description: "Commit screenshots of the app to docs/screenshots"
+        type: boolean
+        default: false
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller pytest
+
+      - name: Get a C++ compiler (WinLibs MinGW-w64) to bundle
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $rel = Invoke-RestMethod -Headers @{Authorization = "Bearer $env:GH_TOKEN"} https://api.github.com/repos/brechtsanders/winlibs_mingw/releases/latest
+          $asset = $rel.assets | Where-Object { $_.name -match '^winlibs-x86_64-posix-seh-gcc-.*-mingw-w64ucrt-.*\.zip$' -and $_.name -notmatch 'llvm' } | Select-Object -First 1
+          Write-Host "Using $($asset.name)"
+          Invoke-WebRequest $asset.browser_download_url -OutFile winlibs.zip
+          Expand-Archive winlibs.zip -DestinationPath winlibs
+          Remove-Item -Recurse -Force winlibs\mingw64\share\doc, winlibs\mingw64\share\info, winlibs\mingw64\share\man -ErrorAction SilentlyContinue
+          winlibs\mingw64\bin\g++.exe --version
+
+      - name: Unit tests (with the bundled compiler on PATH)
+        shell: pwsh
+        run: |
+          $env:PATH = "$PWD\winlibs\mingw64\bin;$env:PATH"
+          python -m pytest -q tests
+
+      - name: Build PairWatch.exe
+        run: >
+          pyinstaller pairwatch_main.py --name PairWatch --windowed --noconfirm --clean
+          --icon packaging/pairwatch.ico
+          --collect-all mediapipe
+          --hidden-import sounddevice
+          --add-data "packaging/pairwatch.ico;."
+
+      - name: Add the compiler next to the app
+        shell: pwsh
+        run: Move-Item winlibs\mingw64 dist\PairWatch\mingw64
+
+      - name: Self-test the built app (whole session, no person needed)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://github.com/ultralytics/assets/releases/download/v0.0.0/zidane.jpg -OutFile zidane.jpg
+          $p = Start-Process dist\PairWatch\PairWatch.exe -ArgumentList "--selftest", "$PWD\selftest", "--image", "$PWD\zidane.jpg" -Wait -PassThru
+          Write-Host "exit code $($p.ExitCode)"
+          if (Test-Path selftest\selftest.json) { Get-Content selftest\selftest.json } else { Write-Host "no selftest.json" }
+          Get-ChildItem selftest
+          if ($p.ExitCode -ne 0) { exit 1 }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: selftest
+          path: selftest
+
+      - name: Commit screenshots
+        if: inputs.screenshots
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force docs\screenshots | Out-Null
+          Copy-Item selftest\start_window.png, selftest\coding_window.png, selftest\camera_check.png docs\screenshots\ -ErrorAction SilentlyContinue
+          Copy-Item selftest\pair_report.html docs\example_pair_report_selftest.html -ErrorAction SilentlyContinue
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs
+          git commit -m "Screenshots from the Windows build"
+          git push
+
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $v = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}".TrimStart("v") } elseif ("${{ inputs.version }}" -ne "") { "${{ inputs.version }}" } else { "0.0.0-dev" }
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$v" packaging\installer.iss
+          Compress-Archive -Path dist\PairWatch -DestinationPath "dist\PairWatch-portable-$v.zip"
+          Get-ChildItem dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PairWatch-windows
+          path: |
+            dist/PairWatch-Setup-*.exe
+            dist/PairWatch-portable-*.zip
+
+      - name: Publish release
+        if: github.ref_type == 'tag' || inputs.version != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', inputs.version) }}
+          name: PairWatch ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', inputs.version) }}
+          target_commitish: ${{ github.sha }}
+          files: |
+            dist/PairWatch-Setup-*.exe
+            dist/PairWatch-portable-*.zip
+          body: |
+            **Download `PairWatch-Setup-*.exe`, run it, then click the PairWatch icon on your desktop.**
+
+            No Python and no separate C++ compiler needed (MinGW g++ is included). Works offline.
+            No video or audio is saved, only numbers. Windows may show "Windows protected your PC" because the app is not code-signed: click **More info → Run anyway**.
+
+            `PairWatch-portable-*.zip` is the same app without installing: unzip and double-click `PairWatch.exe`.
