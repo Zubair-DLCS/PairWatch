@@ -96,8 +96,9 @@ class CodingWindow(tk.Toplevel):
         self.desc.pack(fill="x", padx=8, pady=8)
         tk.Label(left, text="Test results", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=8)
         self.results = tk.Text(left, wrap="word", font=("Consolas", 9), relief="flat", bg="#f6f7f9", padx=8, pady=6)
+        tk.Label(left, text=CREDIT, fg=BLUE, font=("Segoe UI", 9, "italic"), wraplength=360,
+                 justify="left").pack(side="bottom", anchor="w", padx=8, pady=(0, 8))  # pinned, never squeezed out
         self.results.pack(fill="both", expand=True, padx=8, pady=(2, 4))
-        tk.Label(left, text=CREDIT, fg=BLUE, font=("Segoe UI", 9, "italic"), wraplength=360, justify="left").pack(anchor="w", padx=8, pady=(0, 8))
         self.results.tag_config("ok", foreground=GREEN)
         self.results.tag_config("bad", foreground=RED)
 

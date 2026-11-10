@@ -42,7 +42,15 @@ jobs:
           Write-Host "Using $($asset.name)"
           Invoke-WebRequest $asset.browser_download_url -OutFile winlibs.zip
           Expand-Archive winlibs.zip -DestinationPath winlibs
-          Remove-Item -Recurse -Force winlibs\mingw64\share\doc, winlibs\mingw64\share\info, winlibs\mingw64\share\man -ErrorAction SilentlyContinue
+          # keep only what compiling C++ needs (licences stay); the self-test below proves g++ still works
+          $m = "winlibs\mingw64"
+          $before = (Get-ChildItem $m -Recurse -File | Measure-Object Length -Sum).Sum / 1MB
+          Remove-Item -Recurse -Force "$m\share\doc", "$m\share\info", "$m\share\man", "$m\share\gdb", "$m\share\locale", "$m\share\cmake*", "$m\share\ninja*", "$m\share\yasm*", "$m\share\nasm*" -ErrorAction SilentlyContinue
+          Get-ChildItem "$m\bin" -File | Where-Object { $_.Name -match '^(gdb|gfortran|.*fortran|gnat|gm2|gccgo|go|gofmt|cmake|ctest|cpack|ninja|nasm|ndisasm|yasm|vsyasm|ytasm|ccache|doxygen|mingw32-make|make|ld\.gold|gcov|lto-dump|objdump|ccmake|cmcldeps)' } | Remove-Item -Force
+          Get-ChildItem "$m\libexec" -Recurse -File | Where-Object { $_.Name -match '^(f951|cc1obj|cc1objplus|gnat1|go1|cc1gm2|d21|lto1|cc1rust|crab1)' } | Remove-Item -Force
+          Get-ChildItem "$m" -Recurse -File | Where-Object { $_.Name -match '(gfortran|gnat|libgo|libgm2|libgphobos|libobjc|libgdruntime).*\.(a|dll|so)' } | Remove-Item -Force
+          $after = (Get-ChildItem $m -Recurse -File | Measure-Object Length -Sum).Sum / 1MB
+          Write-Host ("MinGW trimmed from {0:N0} MB to {1:N0} MB" -f $before, $after)
           winlibs\mingw64\bin\g++.exe --version
 
       - name: Unit tests (with the bundled compiler on PATH)
