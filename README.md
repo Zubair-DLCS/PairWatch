@@ -25,6 +25,27 @@ At the end of each session it writes a **pair report**. Across sessions it build
 
 Pair programming is common in computer science teaching, but a teacher with thirty students cannot see how each pair actually collaborates. Who does the thinking? Does the navigator really guide, or just watch? Do both look at the same code when they talk about it? Research on multimodal learning analytics studies exactly these signals, usually with eye trackers and lab equipment. PairWatch asks how much of that can be done with one ordinary laptop in an ordinary classroom, and keeps the limits honest.
 
+## Multimodal learning analytics and adaptive support
+
+**Multimodal learning analytics of collaboration.** PairWatch combines three channels and relates them to performance:
+
+| Channel | What it gives |
+|---|---|
+| Audio | speech activity, who speaks, turn-taking, overlap |
+| Video | head direction per student, looking at the partner, joint visual attention on the shared code |
+| Logs | keystrokes per driver, role switches, test runs, compile errors, tasks solved and time to solve |
+
+**Towards an adaptive learning environment.** Today PairWatch gives feedback *after* the session: a report for each pair and a class report for the teacher. The same measures could also drive support *during* the session. These are planned, not built:
+
+| If PairWatch sees… | it could… |
+|---|---|
+| one student has typed almost everything for 10 minutes | suggest switching driver and navigator |
+| the navigator has been silent for a long time | prompt: "Navigator, explain the next step" |
+| the pair talks, but looks at different parts of the code | prompt: "Point at the line you mean" |
+| several failed test runs in a row | offer a hint for the current task |
+
+Whether such prompts help or interrupt is an empirical question, and it is the study this tool is built for. Prompts would follow PairWatch's own rule: when the signals are unclear, do nothing.
+
 ## Install (Windows)
 
 1. Download **`PairWatch-Setup-….exe`** from the [Releases page](https://github.com/Zubair-DLCS/PairWatch/releases/latest).
